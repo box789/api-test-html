@@ -1,155 +1,3 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>API Tester</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; }
-.container { display: flex; flex-direction: column; height: 100vh; }
-header { background: #181825; padding: 12px 24px; border-bottom: 1px solid #313244; display: flex; align-items: center; gap: 12px; }
-header h1 { font-size: 18px; font-weight: 600; color: #cba6f7; }
-header span { color: #6c7086; font-size: 13px; }
-
-.tab-bar { background: #181825; border-bottom: 1px solid #313244; display: flex; align-items: center; padding: 0 24px; gap: 2px; overflow-x: auto; }
-.tab-bar .tab-item { display: flex; align-items: center; gap: 6px; padding: 10px 14px; font-size: 13px; color: #6c7086; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all .15s; user-select: none; }
-.tab-bar .tab-item:hover { color: #cdd6f4; }
-.tab-bar .tab-item.active { color: #cba6f7; border-bottom-color: #cba6f7; }
-.tab-bar .tab-item .close-btn { font-size: 16px; line-height: 1; color: #6c7086; background: none; border: none; cursor: pointer; padding: 0 2px; border-radius: 3px; }
-.tab-bar .tab-item .close-btn:hover { color: #f38ba8; background: rgba(243,139,168,.15); }
-.tab-bar .add-btn { background: none; border: 1px dashed #45475a; color: #a6adc8; padding: 4px 14px; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1; margin-left: 8px; flex-shrink: 0; }
-.tab-bar .add-btn:hover { border-color: #cba6f7; color: #cba6f7; }
-
-.request-panel { padding: 16px 24px 12px; background: #181825; border-bottom: 1px solid #313244; display: flex; flex-direction: column; gap: 10px; }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.row label { font-size: 13px; font-weight: 500; color: #a6adc8; min-width: 60px; }
-.row input, .row select { background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
-.row input:focus, .row select:focus { outline: none; border-color: #cba6f7; }
-.url-input { flex: 1; min-width: 200px; }
-.method-select { width: 100px; }
-.send-btn { background: #cba6f7; color: #1e1e2e; border: none; padding: 8px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s; white-space: nowrap; }
-.send-btn:hover { background: #b4befe; }
-.send-btn:disabled { opacity: .5; cursor: not-allowed; }
-textarea { background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 10px 12px; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; resize: vertical; width: 100%; }
-textarea:focus { outline: none; border-color: #cba6f7; }
-.headers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
-.header-pair { display: flex; gap: 6px; align-items: center; }
-.header-pair input { flex: 1; background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
-.header-pair input:focus { outline: none; border-color: #cba6f7; }
-.header-pair .remove-btn { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; }
-.add-header-btn { background: none; border: 1px dashed #45475a; color: #a6adc8; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.add-header-btn:hover { border-color: #cba6f7; color: #cba6f7; }
-.hint { font-size: 12px; color: #6c7086; margin-top: 2px; }
-
-.response-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.resp-tabs { display: flex; border-bottom: 1px solid #313244; background: #181825; padding: 0 24px; gap: 0; }
-.resp-tab { padding: 10px 20px; font-size: 13px; color: #6c7086; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }
-.resp-tab:hover { color: #cdd6f4; }
-.resp-tab.active { color: #cba6f7; border-bottom-color: #cba6f7; }
-.resp-content { flex: 1; overflow: auto; padding: 0; }
-.resp-pane { display: none; padding: 16px 24px; height: 100%; }
-.resp-pane.active { display: block; }
-.resp-pane pre { background: #11111b; padding: 12px 16px; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; overflow: auto; white-space: pre-wrap; word-break: break-all; max-height: calc(100vh - 460px); }
-.resp-pane h3 { font-size: 13px; font-weight: 500; color: #a6adc8; margin-bottom: 8px; }
-.status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; }
-.status-2xx { background: #a6e3a1; color: #1e1e2e; }
-.status-3xx { background: #f9e2af; color: #1e1e2e; }
-.status-4xx { background: #fab387; color: #1e1e2e; }
-.status-5xx { background: #f38ba8; color: #1e1e2e; }
-.cookie-info { font-size: 13px; color: #a6adc8; margin-bottom: 8px; }
-.cookie-info span { color: #cdd6f4; }
-.cookie-domain { color: #cba6f7; font-weight: 600; font-size: 13px; margin-top: 8px; }
-.cookie-entry { font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; margin-left: 16px; }
-.cookie-flags { color: #6c7086; font-size: 11px; }
-.loading { display: none; color: #a6adc8; font-size: 13px; margin-left: 10px; }
-.loading.active { display: inline; }
-.error-text { color: #f38ba8; }
-</style>
-</head>
-<body>
-
-<div class="container">
-<header>
-<h1>&#x2699; API Tester</h1>
-<span>Postman-like tool in browser</span>
-</header>
-
-<div class="tab-bar" id="tabBar"></div>
-
-<div class="request-panel">
-<div class="row">
-<label for="url">URL</label>
-<input type="text" id="url" class="url-input" placeholder="https://api.example.com/endpoint">
-<select id="method" class="method-select">
-<option value="GET">GET</option>
-<option value="POST">POST</option>
-<option value="PUT">PUT</option>
-<option value="PATCH">PATCH</option>
-<option value="DELETE">DELETE</option>
-<option value="HEAD">HEAD</option>
-<option value="OPTIONS">OPTIONS</option>
-</select>
-<button id="sendBtn" class="send-btn">Send</button>
-<span id="loading" class="loading">Sending...</span>
-</div>
-
-<div class="row" style="align-items: flex-start;">
-<label>Headers</label>
-<div style="flex:1; display:flex; flex-direction:column; gap:6px;">
-<div id="headersList" class="headers-grid"></div>
-<button class="add-header-btn" onclick="addHeader()">+ Add header</button>
-<div class="hint">&#x24d8; Preflight (OPTIONS) возникает если: метод не GET/POST/HEAD, Content-Type не text/plain, или есть кастомные заголовки (Authorization, X-...)</div>
-</div>
-</div>
-
-<div class="row" style="align-items: flex-start;">
-<label>Body</label>
-<textarea id="body" rows="4" placeholder='{"key": "value"}'></textarea>
-</div>
-</div>
-
-<div class="response-panel">
-<div class="resp-tabs">
-<div class="resp-tab active" data-tab="request" onclick="switchRespTab('request')">Request</div>
-<div class="resp-tab" data-tab="status" onclick="switchRespTab('status')">Status</div>
-<div class="resp-tab" data-tab="headers" onclick="switchRespTab('headers')">Response Headers</div>
-<div class="resp-tab" data-tab="cookies" onclick="switchRespTab('cookies')">Cookies</div>
-<div class="resp-tab" data-tab="body" onclick="switchRespTab('body')">Response Body</div>
-</div>
-
-<div class="resp-content">
-<div id="tab-request" class="resp-pane active">
-<h3>Sent Request</h3>
-<pre id="requestDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
-</div>
-<div id="tab-status" class="resp-pane">
-<h3>Status</h3>
-<div id="statusDisplay"><span style="color:#6c7086;">No request sent yet.</span></div>
-</div>
-<div id="tab-headers" class="resp-pane">
-<h3>Response Headers</h3>
-<pre id="headersDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
-</div>
-<div id="tab-cookies" class="resp-pane">
-<h3>Cookies</h3>
-<div id="cookieInfo" class="cookie-info"><span style="color:#6c7086;">No request sent yet.</span></div>
-<div style="margin-bottom:8px;display:flex;gap:6px;align-items:center;">
-<textarea id="cookiesEditor" rows="4" style="flex:1;background:#313244;border:1px solid #45475a;color:#cdd6f4;padding:8px 10px;border-radius:6px;font-size:13px;font-family:'JetBrains Mono','Cascadia Code','Fira Code',monospace;resize:vertical;" placeholder="name1=value1; name2=value2"></textarea>
-<button id="saveCookiesBtn" style="background:#a6e3a1;color:#1e1e2e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;">Save Cookies</button>
-</div>
-<div style="font-size:12px;color:#a6adc8;margin-bottom:6px;">Cookies stored by domain:</div>
-<div id="cookiesDisplay"></div>
-</div>
-<div id="tab-body" class="resp-pane">
-<h3>Response Body</h3>
-<pre id="bodyDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
-</div>
-</div>
-</div>
-</div>
-
-<script>
 const sendBtn = document.getElementById('sendBtn');
 const loading = document.getElementById('loading');
 const requestDisplay = document.getElementById('requestDisplay');
@@ -276,7 +124,6 @@ function createTabData(name) {
     method: 'GET',
     headers: [
       { k: 'Content-Type', v: 'application/json' },
-      { k: 'Connection', v: 'keep-alive' },
       { k: 'Accept', v: '*/*' }
     ],
     body: '',
@@ -496,16 +343,11 @@ sendBtn.addEventListener('click', async () => {
   loadCookieStore();
   const cookiesBefore = document.cookie;
 
-  // Inject stored cookies as Cookie header (if not already set by user in headers list)
-  if (domain) {
-    const stored = buildCookieHeader(domain);
-    const userCookieKey = Object.keys(headers).find(k => k.toLowerCase() === 'cookie');
-    if (stored && !userCookieKey) {
-      headers['Cookie'] = stored;
-    }
-  }
+  // For same-origin requests the browser automatically attaches cookies
+  // (default fetch credentials: 'same-origin'). Manual Cookie header is a
+  // forbidden header name in the Fetch spec and would be stripped anyway.
 
-  const fetchOptions = { method, headers };
+  const fetchOptions = { method, headers, credentials: 'same-origin' };
   if (!['GET', 'HEAD'].includes(method) && body) fetchOptions.body = body;
 
   try {
@@ -678,6 +520,3 @@ document.addEventListener('DOMContentLoaded', () => {
   const tab = getCurrentTab();
   if (tab) { applyFormData(tab); showResponse(tab.response); }
 });
-</script>
-</body>
-</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Tester</title>
+<link rel="stylesheet" href="./main.css">
+</head>
+<body>
+
+<div class="container">
+<header>
+<h1>&#x2699; API Tester</h1>
+<span>Postman-like tool in browser</span>
+</header>
+
+<div class="tab-bar" id="tabBar"></div>
+
+<div class="request-panel">
+<div class="row">
+<label for="url">URL</label>
+<input type="text" id="url" class="url-input" placeholder="https://api.example.com/endpoint">
+<select id="method" class="method-select">
+<option value="GET">GET</option>
+<option value="POST">POST</option>
+<option value="PUT">PUT</option>
+<option value="PATCH">PATCH</option>
+<option value="DELETE">DELETE</option>
+<option value="HEAD">HEAD</option>
+<option value="OPTIONS">OPTIONS</option>
+</select>
+<button id="sendBtn" class="send-btn">Send</button>
+<span id="loading" class="loading">Sending...</span>
+</div>
+
+<div class="row" style="align-items: flex-start;">
+<label>Headers</label>
+<div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+<div id="headersList" class="headers-grid"></div>
+<button class="add-header-btn" onclick="addHeader()">+ Add header</button>
+    <div class="hint">&#x24d8; По умолчанию Content-Type: application/json. CORS preflight (OPTIONS) возникает только при кросс-доменных запросах, когда метод не GET/POST/HEAD, Content-Type не text/plain/form-urlencoded/multipart, или есть кастомные заголовки. На том же домене (same-origin) браузер не делает preflight и автоматически отправляет cookies.</div>
+</div>
+</div>
+
+<div class="row" style="align-items: flex-start;">
+<label>Body</label>
+<textarea id="body" rows="4" placeholder='{"key": "value"}'></textarea>
+</div>
+</div>
+
+<div class="response-panel">
+<div class="resp-tabs">
+<div class="resp-tab active" data-tab="request" onclick="switchRespTab('request')">Request</div>
+<div class="resp-tab" data-tab="status" onclick="switchRespTab('status')">Status</div>
+<div class="resp-tab" data-tab="headers" onclick="switchRespTab('headers')">Response Headers</div>
+<div class="resp-tab" data-tab="cookies" onclick="switchRespTab('cookies')">Cookies</div>
+<div class="resp-tab" data-tab="body" onclick="switchRespTab('body')">Response Body</div>
+</div>
+
+<div class="resp-content">
+<div id="tab-request" class="resp-pane active">
+<h3>Sent Request</h3>
+<pre id="requestDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+</div>
+<div id="tab-status" class="resp-pane">
+<h3>Status</h3>
+<div id="statusDisplay"><span style="color:#6c7086;">No request sent yet.</span></div>
+</div>
+<div id="tab-headers" class="resp-pane">
+<h3>Response Headers</h3>
+<pre id="headersDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+</div>
+<div id="tab-cookies" class="resp-pane">
+<h3>Cookies</h3>
+<div id="cookieInfo" class="cookie-info"><span style="color:#6c7086;">No request sent yet.</span></div>
+<div style="margin-bottom:8px;display:flex;gap:6px;align-items:center;">
+<textarea id="cookiesEditor" rows="4" style="flex:1;background:#313244;border:1px solid #45475a;color:#cdd6f4;padding:8px 10px;border-radius:6px;font-size:13px;font-family:'JetBrains Mono','Cascadia Code','Fira Code',monospace;resize:vertical;" placeholder="name1=value1; name2=value2"></textarea>
+<button id="saveCookiesBtn" style="background:#a6e3a1;color:#1e1e2e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;">Save Cookies</button>
+</div>
+<div style="font-size:12px;color:#a6adc8;margin-bottom:6px;">Cookies stored by domain:</div>
+<div id="cookiesDisplay"></div>
+</div>
+<div id="tab-body" class="resp-pane">
+<h3>Response Body</h3>
+<pre id="bodyDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+</div>
+</div>
+</div>
+</div>
+
+<script src="./main.js"></script>
+</body>
+</html>
