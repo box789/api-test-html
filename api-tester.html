@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Tester</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; height: 100vh; }
+.container { display: flex; flex-direction: column; height: 100vh; }
+header { background: #181825; padding: 12px 24px; border-bottom: 1px solid #313244; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 18px; font-weight: 600; color: #cba6f7; }
+header span { color: #6c7086; font-size: 13px; }
+
+.tab-bar { background: #181825; border-bottom: 1px solid #313244; display: flex; align-items: center; padding: 0 24px; gap: 2px; overflow-x: auto; }
+.tab-bar .tab-item { display: flex; align-items: center; gap: 6px; padding: 10px 14px; font-size: 13px; color: #6c7086; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all .15s; user-select: none; }
+.tab-bar .tab-item:hover { color: #cdd6f4; }
+.tab-bar .tab-item.active { color: #cba6f7; border-bottom-color: #cba6f7; }
+.tab-bar .tab-item .close-btn { font-size: 16px; line-height: 1; color: #6c7086; background: none; border: none; cursor: pointer; padding: 0 2px; border-radius: 3px; }
+.tab-bar .tab-item .close-btn:hover { color: #f38ba8; background: rgba(243,139,168,.15); }
+.tab-bar .add-btn { background: none; border: 1px dashed #45475a; color: #a6adc8; padding: 4px 14px; border-radius: 6px; cursor: pointer; font-size: 18px; line-height: 1; margin-left: 8px; flex-shrink: 0; }
+.tab-bar .add-btn:hover { border-color: #cba6f7; color: #cba6f7; }
+
+.request-panel { padding: 16px 24px 12px; background: #181825; border-bottom: 1px solid #313244; display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row label { font-size: 13px; font-weight: 500; color: #a6adc8; min-width: 60px; }
+.row input, .row select { background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
+.row input:focus, .row select:focus { outline: none; border-color: #cba6f7; }
+.url-input { flex: 1; min-width: 200px; }
+.method-select { width: 100px; }
+.send-btn { background: #cba6f7; color: #1e1e2e; border: none; padding: 8px 28px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s; white-space: nowrap; }
+.send-btn:hover { background: #b4befe; }
+.send-btn:disabled { opacity: .5; cursor: not-allowed; }
+textarea { background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 10px 12px; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; resize: vertical; width: 100%; }
+textarea:focus { outline: none; border-color: #cba6f7; }
+.headers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+.header-pair { display: flex; gap: 6px; align-items: center; }
+.header-pair input { flex: 1; background: #313244; border: 1px solid #45475a; color: #cdd6f4; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.header-pair input:focus { outline: none; border-color: #cba6f7; }
+.header-pair .remove-btn { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; }
+.add-header-btn { background: none; border: 1px dashed #45475a; color: #a6adc8; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.add-header-btn:hover { border-color: #cba6f7; color: #cba6f7; }
+.hint { font-size: 12px; color: #6c7086; margin-top: 2px; }
+
+.response-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.resp-tabs { display: flex; border-bottom: 1px solid #313244; background: #181825; padding: 0 24px; gap: 0; }
+.resp-tab { padding: 10px 20px; font-size: 13px; color: #6c7086; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }
+.resp-tab:hover { color: #cdd6f4; }
+.resp-tab.active { color: #cba6f7; border-bottom-color: #cba6f7; }
+.resp-content { flex: 1; overflow: auto; padding: 0; }
+.resp-pane { display: none; padding: 16px 24px; height: 100%; }
+.resp-pane.active { display: block; }
+.resp-pane pre { background: #11111b; padding: 12px 16px; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; overflow: auto; white-space: pre-wrap; word-break: break-all; max-height: calc(100vh - 460px); }
+.resp-pane h3 { font-size: 13px; font-weight: 500; color: #a6adc8; margin-bottom: 8px; }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; }
+.status-2xx { background: #a6e3a1; color: #1e1e2e; }
+.status-3xx { background: #f9e2af; color: #1e1e2e; }
+.status-4xx { background: #fab387; color: #1e1e2e; }
+.status-5xx { background: #f38ba8; color: #1e1e2e; }
+.cookie-info { font-size: 13px; color: #a6adc8; margin-bottom: 8px; }
+.cookie-info span { color: #cdd6f4; }
+.cookie-domain { color: #cba6f7; font-weight: 600; font-size: 13px; margin-top: 8px; }
+.cookie-entry { font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; margin-left: 16px; }
+.cookie-flags { color: #6c7086; font-size: 11px; }
+.loading { display: none; color: #a6adc8; font-size: 13px; margin-left: 10px; }
+.loading.active { display: inline; }
+.error-text { color: #f38ba8; }
+</style>
+</head>
+<body>
+
+<div class="container">
+<header>
+<h1>&#x2699; API Tester</h1>
+<span>Postman-like tool in browser</span>
+</header>
+
+<div class="tab-bar" id="tabBar"></div>
+
+<div class="request-panel">
+<div class="row">
+<label for="url">URL</label>
+<input type="text" id="url" class="url-input" placeholder="https://api.example.com/endpoint">
+<select id="method" class="method-select">
+<option value="GET">GET</option>
+<option value="POST">POST</option>
+<option value="PUT">PUT</option>
+<option value="PATCH">PATCH</option>
+<option value="DELETE">DELETE</option>
+<option value="HEAD">HEAD</option>
+<option value="OPTIONS">OPTIONS</option>
+</select>
+<button id="sendBtn" class="send-btn">Send</button>
+<span id="loading" class="loading">Sending...</span>
+</div>
+
+<div class="row" style="align-items: flex-start;">
+<label>Headers</label>
+<div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+<div id="headersList" class="headers-grid"></div>
+<button class="add-header-btn" onclick="addHeader()">+ Add header</button>
+<div class="hint">&#x24d8; Preflight (OPTIONS) возникает если: метод не GET/POST/HEAD, Content-Type не text/plain, или есть кастомные заголовки (Authorization, X-...)</div>
+</div>
+</div>
+
+<div class="row" style="align-items: flex-start;">
+<label>Body</label>
+<textarea id="body" rows="4" placeholder='{"key": "value"}'></textarea>
+</div>
+</div>
+
+<div class="response-panel">
+<div class="resp-tabs">
+<div class="resp-tab active" data-tab="request" onclick="switchRespTab('request')">Request</div>
+<div class="resp-tab" data-tab="status" onclick="switchRespTab('status')">Status</div>
+<div class="resp-tab" data-tab="headers" onclick="switchRespTab('headers')">Response Headers</div>
+<div class="resp-tab" data-tab="cookies" onclick="switchRespTab('cookies')">Cookies</div>
+<div class="resp-tab" data-tab="body" onclick="switchRespTab('body')">Response Body</div>
+</div>
+
+<div class="resp-content">
+<div id="tab-request" class="resp-pane active">
+<h3>Sent Request</h3>
+<pre id="requestDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+</div>
+<div id="tab-status" class="resp-pane">
+<h3>Status</h3>
+<div id="statusDisplay"><span style="color:#6c7086;">No request sent yet.</span></div>
+</div>
+<div id="tab-headers" class="resp-pane">
+<h3>Response Headers</h3>
+<pre id="headersDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+</div>
+<div id="tab-cookies" class="resp-pane">
+<h3>Cookies</h3>
+<div id="cookieInfo" class="cookie-info"><span style="color:#6c7086;">No request sent yet.</span></div>
+<div style="margin-bottom:8px;display:flex;gap:6px;align-items:center;">
+<textarea id="cookiesEditor" rows="4" style="flex:1;background:#313244;border:1px solid #45475a;color:#cdd6f4;padding:8px 10px;border-radius:6px;font-size:13px;font-family:'JetBrains Mono','Cascadia Code','Fira Code',monospace;resize:vertical;" placeholder="name1=value1; name2=value2"></textarea>
+<button id="saveCookiesBtn" style="background:#a6e3a1;color:#1e1e2e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;">Save Cookies</button>
+</div>
+<div style="font-size:12px;color:#a6adc8;margin-bottom:6px;">Cookies stored by domain:</div>
+<div id="cookiesDisplay"></div>
+</div>
+<div id="tab-body" class="resp-pane">
+<h3>Response Body</h3>
+<pre id="bodyDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+const sendBtn = document.getElementById('sendBtn');
+const loading = document.getElementById('loading');
+const requestDisplay = document.getElementById('requestDisplay');
+const statusDisplay = document.getElementById('statusDisplay');
+const headersDisplay = document.getElementById('headersDisplay');
+const cookiesDisplay = document.getElementById('cookiesDisplay');
+const cookieInfo = document.getElementById('cookieInfo');
+const bodyDisplay = document.getElementById('bodyDisplay');
+const urlInput = document.getElementById('url');
+const methodSelect = document.getElementById('method');
+const bodyTextarea = document.getElementById('body');
+const headersList = document.getElementById('headersList');
+const cookiesEditor = document.getElementById('cookiesEditor');
+const saveCookiesBtn = document.getElementById('saveCookiesBtn');
+
+let tabs = [];
+let currentTabId = null;
+
+// ---- Cookie Store (manual, per-domain, persists in localStorage) ----
+let cookieStore = {};
+
+function loadCookieStore() {
+  try { cookieStore = JSON.parse(localStorage.getItem('apiTester_cookies')) || {}; } catch (e) { cookieStore = {}; }
+}
+
+function saveCookieStore() {
+  localStorage.setItem('apiTester_cookies', JSON.stringify(cookieStore));
+}
+
+function addCookieToStore(domain, name, value, attrs) {
+  if (!cookieStore[domain]) cookieStore[domain] = {};
+  if (attrs.maxAge !== null && attrs.maxAge <= 0) {
+    delete cookieStore[domain][name];
+    if (Object.keys(cookieStore[domain]).length === 0) delete cookieStore[domain];
+    saveCookieStore();
+    return 'deleted';
+  }
+  cookieStore[domain][name] = {
+    value: value,
+    path: attrs.path || '/',
+    domain: attrs.domain || domain,
+    httpOnly: !!attrs.httpOnly,
+    secure: !!attrs.secure,
+    sameSite: attrs.sameSite || null,
+    date: Date.now()
+  };
+  saveCookieStore();
+  return 'saved';
+}
+
+function parseSetCookieHeaders(url, rawHeaders) {
+  const domain = getUrlDomain(url);
+  if (!domain) return [];
+  const results = [];
+  rawHeaders.forEach(raw => {
+    try {
+      const parts = raw.split(';').map(s => s.trim());
+      const first = parts[0];
+      const eqIdx = first.indexOf('=');
+      if (eqIdx <= 0) return;
+      const name = first.substring(0, eqIdx).trim();
+      const value = first.substring(eqIdx + 1).trim();
+      let maxAge = null, path = '/', cookieDomain = domain;
+      let httpOnly = false, secure = false, sameSite = null;
+      for (let i = 1; i < parts.length; i++) {
+        const p = parts[i];
+        const eq = p.indexOf('=');
+        let key, val;
+        if (eq > 0) { key = p.substring(0, eq).trim().toLowerCase(); val = p.substring(eq + 1).trim(); }
+        else { key = p.trim().toLowerCase(); val = ''; }
+        if (key === 'max-age') maxAge = parseInt(val, 10);
+        else if (key === 'path') path = val || '/';
+        else if (key === 'domain') cookieDomain = val.replace(/^\./, '');
+        else if (key === 'httponly') httpOnly = true;
+        else if (key === 'secure') secure = true;
+        else if (key === 'samesite') sameSite = val.toLowerCase();
+      }
+      const action = addCookieToStore(cookieDomain, name, value, { maxAge, path, domain: cookieDomain, httpOnly, secure, sameSite });
+      results.push({ name, value, domain: cookieDomain, path, httpOnly, secure, sameSite, action });
+    } catch (e) { console.warn('Set-Cookie parse error:', raw, e); }
+  });
+  return results;
+}
+
+function buildCookieHeader(domain) {
+  loadCookieStore();
+  if (!cookieStore[domain]) return '';
+  return Object.entries(cookieStore[domain])
+    .map(([name, data]) => name + '=' + data.value)
+    .join('; ');
+}
+
+function renderCookieStore() {
+  loadCookieStore();
+  const domains = Object.keys(cookieStore);
+  if (!domains.length) return '<span style="color:#6c7086;">(no cookies stored)</span>';
+  let html = '';
+  domains.sort().forEach(d => {
+    html += '<div class="cookie-domain">[' + d + ']</div>';
+    Object.entries(cookieStore[d]).forEach(([name, data]) => {
+      const flags = [];
+      if (data.httpOnly) flags.push('HttpOnly');
+      if (data.secure) flags.push('Secure');
+      if (data.sameSite) flags.push('SameSite=' + data.sameSite);
+      const flagStr = flags.length ? ' <span class="cookie-flags">(' + flags.join(', ') + ')</span>' : '';
+      html += '<div class="cookie-entry">' + name + ' = ' + data.value + flagStr + '</div>';
+    });
+  });
+  return html;
+}
+
+function getUrlDomain(url) {
+  try { return new URL(url).hostname; } catch { return null; }
+}
+
+// ---- Tab management ----
+function generateId() { return 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+function createTabData(name) {
+  return {
+    id: generateId(),
+    name: name || 'New Request',
+    url: '',
+    method: 'GET',
+    headers: [
+      { k: 'Content-Type', v: 'application/json' },
+      { k: 'Connection', v: 'keep-alive' },
+      { k: 'Accept', v: '*/*' }
+    ],
+    body: '',
+    response: null
+  };
+}
+
+function saveToStorage() {
+  localStorage.setItem('apiTester_tabs', JSON.stringify(tabs));
+  localStorage.setItem('apiTester_activeTab', currentTabId);
+}
+
+function addHeader(key, val) {
+  const div = document.createElement('div');
+  div.className = 'header-pair';
+  div.innerHTML = '<input type="text" class="hdr-key" placeholder="Header name" value="' + (key||'').replace(/"/g,'&quot;') + '"><input type="text" class="hdr-val" placeholder="Value" value="' + (val||'').replace(/"/g,'&quot;') + '"><button class="remove-btn" onclick="this.parentElement.remove(); autoSave();">&times;</button>';
+  headersList.appendChild(div);
+}
+
+function renderHeaders(arr) {
+  headersList.innerHTML = '';
+  if (!arr || !arr.length) { addHeader('', ''); return; }
+  arr.forEach(h => addHeader(h.k, h.v));
+}
+
+function getHeaders() {
+  const pairs = document.querySelectorAll('.header-pair');
+  const arr = [];
+  pairs.forEach(p => {
+    const k = p.querySelector('.hdr-key').value.trim();
+    const v = p.querySelector('.hdr-val').value.trim();
+    if (k) arr.push({ k, v });
+  });
+  return arr;
+}
+
+function collectFormData() {
+  return { url: urlInput.value, method: methodSelect.value, headers: getHeaders(), body: bodyTextarea.value };
+}
+
+function applyFormData(data) {
+  urlInput.value = data.url || '';
+  methodSelect.value = data.method || 'GET';
+  renderHeaders(data.headers);
+  bodyTextarea.value = data.body || '';
+}
+
+function getCurrentTab() { return tabs.find(t => t.id === currentTabId); }
+
+function saveCurrentTab() {
+  const tab = getCurrentTab();
+  if (!tab) return;
+  const fd = collectFormData();
+  tab.url = fd.url; tab.method = fd.method; tab.headers = fd.headers; tab.body = fd.body;
+}
+
+function loadTab(id) {
+  const tab = tabs.find(t => t.id === id);
+  if (!tab) return;
+  currentTabId = id;
+  applyFormData(tab);
+  renderTabs();
+  showResponse(tab.response);
+}
+
+function switchTab(id) {
+  if (id === currentTabId) return;
+  saveCurrentTab();
+  loadTab(id);
+  saveToStorage();
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tabBar');
+  bar.innerHTML = '';
+  tabs.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'tab-item' + (t.id === currentTabId ? ' active' : '');
+    el.setAttribute('data-id', t.id);
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = t.name;
+    el.appendChild(nameSpan);
+    const close = document.createElement('button');
+    close.className = 'close-btn';
+    close.textContent = '\u00d7';
+    close.title = 'Delete tab';
+    close.addEventListener('click', e => { e.stopPropagation(); deleteTab(t.id); });
+    el.appendChild(close);
+    el.addEventListener('click', () => switchTab(t.id));
+    bar.appendChild(el);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-btn';
+  addBtn.textContent = '+';
+  addBtn.title = 'Add new tab';
+  addBtn.addEventListener('click', addTab);
+  bar.appendChild(addBtn);
+}
+
+function addTab() {
+  saveCurrentTab();
+  const tab = createTabData('Request ' + (tabs.length + 1));
+  tabs.push(tab);
+  currentTabId = tab.id;
+  applyFormData(tab);
+  renderTabs();
+  saveToStorage();
+  showResponse(null);
+}
+
+function deleteTab(id) {
+  if (tabs.length <= 1) return;
+  const idx = tabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  tabs.splice(idx, 1);
+  if (currentTabId === id) {
+    const next = tabs[Math.min(idx, tabs.length - 1)];
+    currentTabId = next.id;
+    applyFormData(next);
+    showResponse(next.response);
+  }
+  renderTabs();
+  saveToStorage();
+}
+
+function autoSave() { saveCurrentTab(); saveToStorage(); }
+
+function showResponse(resp) {
+  updateCookiesEditor();
+  if (!resp) {
+    requestDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+    statusDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+    headersDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+    cookiesDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+    cookieInfo.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+    bodyDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+    return;
+  }
+  if (resp.error) {
+    statusDisplay.innerHTML = '<span class="status-badge" style="background:#f38ba8;color:#1e1e2e;">Error</span>';
+    headersDisplay.textContent = '(no headers)';
+    cookiesDisplay.innerHTML = renderCookieStore();
+    cookieInfo.innerHTML = 'Error: <span class="error-text">' + resp.error + '</span>';
+    bodyDisplay.textContent = 'Error: ' + resp.error;
+    requestDisplay.textContent = resp.requestLog || '';
+    return;
+  }
+  statusDisplay.innerHTML = resp.statusHtml || '<span style="color:#6c7086;">No status</span>';
+  headersDisplay.textContent = resp.headersText || '(no headers)';
+  cookiesDisplay.innerHTML = resp.cookiesHtml || '<span style="color:#6c7086;">(no cookies stored)</span>';
+  cookieInfo.innerHTML = resp.cookieInfo || '';
+  bodyDisplay.textContent = resp.bodyText || '';
+  requestDisplay.textContent = resp.requestLog || '';
+}
+
+function switchRespTab(name) {
+  document.querySelectorAll('.resp-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.resp-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector('.resp-tab[data-tab="' + name + '"]').classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function getStatusClass(status) {
+  if (status >= 200 && status < 300) return 'status-2xx';
+  if (status >= 300 && status < 400) return 'status-3xx';
+  if (status >= 400 && status < 500) return 'status-4xx';
+  if (status >= 500) return 'status-5xx';
+  return '';
+}
+
+function tryFormatJson(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
+}
+
+function formatResponseHeaders(response) {
+  let out = '';
+  response.headers.forEach((val, key) => { out += key + ': ' + val + '\n'; });
+  return out;
+}
+
+// ---- Send handler ----
+sendBtn.addEventListener('click', async () => {
+  const url = urlInput.value.trim();
+  if (!url) { alert('Please enter a URL'); return; }
+
+  saveCurrentTab();
+
+  const method = methodSelect.value;
+  const headersArr = getHeaders();
+  const body = bodyTextarea.value;
+
+  const domain = getUrlDomain(url);
+  const headers = {};
+  headersArr.forEach(h => { headers[h.k] = h.v; });
+
+  sendBtn.disabled = true;
+  loading.classList.add('active');
+
+  const crossOrigin = (() => { try { return new URL(url).origin !== location.origin; } catch { return false; } })();
+  const isNonSimpleContentType = headers['Content-Type'] && !['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data'].includes(headers['Content-Type']);
+  const hasCustomHeaders = Object.keys(headers).some(k => !['cookie', 'content-type', 'accept', 'accept-language', 'content-language'].includes(k.toLowerCase()));
+  const mayPreflight = !['GET', 'HEAD', 'POST'].includes(method) || isNonSimpleContentType || hasCustomHeaders;
+
+  let requestLog = method + ' ' + url + '\n\n--- Request Headers ---\n';
+  Object.entries(headers).forEach(([k, v]) => { requestLog += k + ': ' + v + '\n'; });
+  if (body && !['GET', 'HEAD'].includes(method)) {
+    requestLog += '\n--- Request Body ---\n' + body + '\n';
+  }
+  if (crossOrigin && mayPreflight) {
+    requestLog += '\n--- CORS Note ---\nBrowser may send OPTIONS preflight before actual ' + method + '.\nCheck DevTools (F12 > Network) to see both requests.\n';
+  }
+  requestDisplay.textContent = requestLog;
+  switchRespTab('request');
+
+  let respData = { requestLog };
+
+  loadCookieStore();
+  const cookiesBefore = document.cookie;
+
+  // Inject stored cookies as Cookie header (if not already set by user in headers list)
+  if (domain) {
+    const stored = buildCookieHeader(domain);
+    const userCookieKey = Object.keys(headers).find(k => k.toLowerCase() === 'cookie');
+    if (stored && !userCookieKey) {
+      headers['Cookie'] = stored;
+    }
+  }
+
+  const fetchOptions = { method, headers };
+  if (!['GET', 'HEAD'].includes(method) && body) fetchOptions.body = body;
+
+  try {
+    const response = await fetch(url, fetchOptions);
+    const responseStatus = response.status;
+    const responseStatusText = response.statusText;
+
+    let responseBodyText = '';
+    const ct = response.headers.get('content-type') || '';
+    if (ct.includes('application/json') || ct.includes('text/') || ct.includes('xml') || ct.includes('html')) {
+      responseBodyText = await response.text();
+    } else {
+      const blob = await response.blob();
+      responseBodyText = '[Binary data: ' + (blob.type || 'unknown type') + ', ' + blob.size + ' bytes]';
+    }
+
+    // Detect cookies: try response headers (works with --disable-web-security), then fallback to document.cookie diff
+    let cookieResults = [];
+    try {
+      response.headers.forEach((val, key) => {
+        if (key.toLowerCase() === 'set-cookie') {
+          cookieResults = cookieResults.concat(parseSetCookieHeaders(url, [val]));
+        }
+      });
+    } catch (e) {}
+    if (cookieResults.length === 0 && domain) {
+      const cookiesAfter = document.cookie;
+      if (cookiesAfter !== cookiesBefore) {
+        const before = {}; cookiesBefore.split(';').map(s => s.trim()).filter(Boolean).forEach(c => { const e = c.indexOf('='); if (e > 0) before[c.slice(0, e).trim()] = c.slice(e + 1).trim(); });
+        const after = {}; cookiesAfter.split(';').map(s => s.trim()).filter(Boolean).forEach(c => { const e = c.indexOf('='); if (e > 0) after[c.slice(0, e).trim()] = c.slice(e + 1).trim(); });
+        const newOrChanged = [];
+        for (const [n, v] of Object.entries(after)) {
+          if (before[n] === undefined || before[n] !== v) newOrChanged.push({ name: n, value: v });
+        }
+        newOrChanged.forEach(c => addCookieToStore(domain, c.name, c.value, {}));
+        cookieResults = newOrChanged.map(c => ({ name: c.name, action: 'saved' }));
+      }
+    }
+
+    const formattedBody = tryFormatJson(responseBodyText);
+    const statusHtml = '<span class="status-badge ' + getStatusClass(responseStatus) + '">' + responseStatus + ' ' + responseStatusText + '</span>';
+    const headersText = formatResponseHeaders(response) || '(no headers)';
+    const cookiesHtml = renderCookieStore();
+
+    const added = cookieResults.filter(r => r.action === 'saved');
+    const deleted = cookieResults.filter(r => r.action === 'deleted');
+    let cookieInfoHtml = '';
+    if (added.length > 0) {
+      cookieInfoHtml = 'Received <span>' + added.length + '</span> cookie(s) from this response (';
+      cookieInfoHtml += added.map(r => r.name).join(', ') + ')';
+    }
+    if (deleted.length > 0) {
+      if (cookieInfoHtml) cookieInfoHtml += '. ';
+      cookieInfoHtml += 'Deleted <span>' + deleted.length + '</span> cookie(s) (' + deleted.map(r => r.name).join(', ') + ')';
+    }
+    if (!cookieInfoHtml) {
+      cookieInfoHtml = 'No cookies in this response. Stored cookies preserved.';
+    }
+    if (added.length === 0 && cookieResults.length === 0) {
+      loadCookieStore();
+      const hasCookies = Object.keys(cookieStore).length > 0;
+      if (!hasCookies) {
+        cookieInfoHtml += ' &#x24d8; HttpOnly cookies (like .AspNet.ApplicationCookie) cannot be read via JavaScript but are stored by browser. <a href="#" onclick="event.preventDefault(); alert(\'Open DevTools (F12) > Application > Cookies and select the domain to view all cookies including HttpOnly.\')" style="color:#cba6f7;">How to view?</a>';
+      }
+    }
+
+    statusDisplay.innerHTML = statusHtml;
+    headersDisplay.textContent = headersText;
+    cookiesDisplay.innerHTML = cookiesHtml;
+    cookieInfo.innerHTML = cookieInfoHtml;
+    bodyDisplay.textContent = formattedBody;
+    switchRespTab('status');
+
+    respData.statusHtml = statusHtml;
+    respData.headersText = headersText;
+    respData.cookiesHtml = cookiesHtml;
+    respData.cookieInfo = cookieInfoHtml;
+    respData.bodyText = formattedBody;
+    respData.error = null;
+
+    updateCookiesEditor();
+
+  } catch (err) {
+    const errMsg = err.message;
+    statusDisplay.innerHTML = '<span class="status-badge" style="background:#f38ba8;color:#1e1e2e;">Error</span>';
+    headersDisplay.textContent = '(no headers)';
+    cookiesDisplay.innerHTML = renderCookieStore();
+    cookieInfo.innerHTML = 'Error: <span class="error-text">' + errMsg + '</span>';
+    updateCookiesEditor();
+    bodyDisplay.textContent = 'Error: ' + errMsg;
+    switchRespTab('status');
+
+    respData.error = errMsg;
+  }
+
+  const tab = getCurrentTab();
+  if (tab) { tab.response = respData; saveToStorage(); }
+
+  sendBtn.disabled = false;
+  loading.classList.remove('active');
+});
+
+function updateCookiesEditor() {
+  const domain = getUrlDomain(urlInput.value);
+  if (!domain) { cookiesEditor.value = ''; return; }
+  loadCookieStore();
+  if (!cookieStore[domain] || !Object.keys(cookieStore[domain]).length) {
+    cookiesEditor.value = '';
+    return;
+  }
+  cookiesEditor.value = Object.entries(cookieStore[domain])
+    .map(([name, data]) => name + '=' + data.value)
+    .join('; ');
+}
+
+saveCookiesBtn.addEventListener('click', () => {
+  const raw = cookiesEditor.value.trim();
+  const domain = getUrlDomain(urlInput.value);
+  if (!domain) { alert('Enter a URL first to associate cookies with the domain.'); return; }
+
+  loadCookieStore();
+  if (!raw) {
+    delete cookieStore[domain];
+    saveCookieStore();
+    cookiesDisplay.innerHTML = renderCookieStore();
+    cookieInfo.innerHTML = 'Cookies cleared for <span>' + domain + '</span>';
+    return;
+  }
+
+  const newCookies = {};
+  raw.split(';').map(s => s.trim()).filter(Boolean).forEach(pair => {
+    const eq = pair.indexOf('=');
+    if (eq > 0) newCookies[pair.slice(0, eq).trim()] = pair.slice(eq + 1).trim();
+  });
+
+  cookieStore[domain] = {};
+  Object.entries(newCookies).forEach(([name, value]) => {
+    cookieStore[domain][name] = { value, path: '/', domain, httpOnly: false, secure: false, sameSite: null, date: Date.now() };
+  });
+  saveCookieStore();
+
+  cookiesDisplay.innerHTML = renderCookieStore();
+  cookieInfo.innerHTML = 'Saved <span>' + Object.keys(newCookies).length + '</span> cookie(s) for <span>' + domain + '</span>';
+});
+
+// Auto-save on form changes
+[urlInput, methodSelect, bodyTextarea].forEach(el => {
+  el.addEventListener('input', autoSave);
+  el.addEventListener('change', autoSave);
+});
+headersList.addEventListener('input', autoSave);
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+  loadCookieStore();
+  const stored = localStorage.getItem('apiTester_tabs');
+  if (stored) {
+    try {
+      tabs = JSON.parse(stored);
+      currentTabId = localStorage.getItem('apiTester_activeTab');
+      if (!tabs.find(t => t.id === currentTabId)) currentTabId = tabs[0]?.id;
+    } catch { tabs = []; }
+  }
+  if (!tabs.length) {
+    const tab = createTabData('Request 1');
+    tabs.push(tab);
+    currentTabId = tab.id;
+  }
+  renderTabs();
+  const tab = getCurrentTab();
+  if (tab) { applyFormData(tab); showResponse(tab.response); }
+});
+</script>
+</body>
+</html>
