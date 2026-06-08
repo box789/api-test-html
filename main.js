@@ -13,6 +13,16 @@ const headersList = document.getElementById('headersList');
 const cookiesEditor = document.getElementById('cookiesEditor');
 const saveCookiesBtn = document.getElementById('saveCookiesBtn');
 
+
+function escapeHtml(str) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(str).replace(/[&<>"']/g, c => map[c]);
+}
+
+let saveTimer;
+const respTabs = document.querySelectorAll('.resp-tab');
+const respPanes = document.querySelectorAll('.resp-pane');
+
 let tabs = [];
 let currentTabId = null;
 
@@ -91,19 +101,18 @@ function buildCookieHeader(domain) {
 }
 
 function renderCookieStore() {
-  loadCookieStore();
   const domains = Object.keys(cookieStore);
   if (!domains.length) return '<span style="color:#6c7086;">(no cookies stored)</span>';
   let html = '';
   domains.sort().forEach(d => {
-    html += '<div class="cookie-domain">[' + d + ']</div>';
+    html += '<div class="cookie-domain">[' + escapeHtml(d) + ']</div>';
     Object.entries(cookieStore[d]).forEach(([name, data]) => {
       const flags = [];
       if (data.httpOnly) flags.push('HttpOnly');
       if (data.secure) flags.push('Secure');
       if (data.sameSite) flags.push('SameSite=' + data.sameSite);
       const flagStr = flags.length ? ' <span class="cookie-flags">(' + flags.join(', ') + ')</span>' : '';
-      html += '<div class="cookie-entry">' + name + ' = ' + data.value + flagStr + '</div>';
+      html += '<div class="cookie-entry">' + escapeHtml(name) + ' = ' + escapeHtml(data.value) + flagStr + '</div>';
     });
   });
   return html;
@@ -139,7 +148,27 @@ function saveToStorage() {
 function addHeader(key, val) {
   const div = document.createElement('div');
   div.className = 'header-pair';
-  div.innerHTML = '<input type="text" class="hdr-key" placeholder="Header name" value="' + (key||'').replace(/"/g,'&quot;') + '"><input type="text" class="hdr-val" placeholder="Value" value="' + (val||'').replace(/"/g,'&quot;') + '"><button class="remove-btn" onclick="this.parentElement.remove(); autoSave();">&times;</button>';
+
+  const keyInput = document.createElement('input');
+  keyInput.type = 'text';
+  keyInput.className = 'hdr-key';
+  keyInput.placeholder = 'Header name';
+  keyInput.value = key || '';
+
+  const valInput = document.createElement('input');
+  valInput.type = 'text';
+  valInput.className = 'hdr-val';
+  valInput.placeholder = 'Value';
+  valInput.value = val || '';
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-btn';
+  removeBtn.innerHTML = '&times;';
+  removeBtn.addEventListener('click', () => { div.remove(); autoSave(); });
+
+  div.appendChild(keyInput);
+  div.appendChild(valInput);
+  div.appendChild(removeBtn);
   headersList.appendChild(div);
 }
 
@@ -249,7 +278,11 @@ function deleteTab(id) {
   saveToStorage();
 }
 
-function autoSave() { saveCurrentTab(); saveToStorage(); }
+function autoSave() {
+  saveCurrentTab();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToStorage, 300);
+}
 
 function showResponse(resp) {
   updateCookiesEditor();
@@ -266,7 +299,7 @@ function showResponse(resp) {
     statusDisplay.innerHTML = '<span class="status-badge" style="background:#f38ba8;color:#1e1e2e;">Error</span>';
     headersDisplay.textContent = '(no headers)';
     cookiesDisplay.innerHTML = renderCookieStore();
-    cookieInfo.innerHTML = 'Error: <span class="error-text">' + resp.error + '</span>';
+    cookieInfo.innerHTML = 'Error: <span class="error-text">' + escapeHtml(resp.error) + '</span>';
     bodyDisplay.textContent = 'Error: ' + resp.error;
     requestDisplay.textContent = resp.requestLog || '';
     return;
@@ -274,14 +307,14 @@ function showResponse(resp) {
   statusDisplay.innerHTML = resp.statusHtml || '<span style="color:#6c7086;">No status</span>';
   headersDisplay.textContent = resp.headersText || '(no headers)';
   cookiesDisplay.innerHTML = resp.cookiesHtml || '<span style="color:#6c7086;">(no cookies stored)</span>';
-  cookieInfo.innerHTML = resp.cookieInfo || '';
+  cookieInfo.innerHTML = escapeHtml(resp.cookieInfo || '');
   bodyDisplay.textContent = resp.bodyText || '';
   requestDisplay.textContent = resp.requestLog || '';
 }
 
 function switchRespTab(name) {
-  document.querySelectorAll('.resp-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.resp-pane').forEach(p => p.classList.remove('active'));
+  respTabs.forEach(t => t.classList.remove('active'));
+  respPanes.forEach(p => p.classList.remove('active'));
   document.querySelector('.resp-tab[data-tab="' + name + '"]').classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
 }
@@ -299,9 +332,9 @@ function tryFormatJson(text) {
 }
 
 function formatResponseHeaders(response) {
-  let out = '';
-  response.headers.forEach((val, key) => { out += key + ': ' + val + '\n'; });
-  return out;
+  const parts = [];
+  response.headers.forEach((val, key) => { parts.push(key + ': ' + val); });
+  return parts.join('\n') + '\n';
 }
 
 // ---- Send handler ----
@@ -410,7 +443,10 @@ sendBtn.addEventListener('click', async () => {
       loadCookieStore();
       const hasCookies = Object.keys(cookieStore).length > 0;
       if (!hasCookies) {
-        cookieInfoHtml += ' &#x24d8; HttpOnly cookies (like .AspNet.ApplicationCookie) cannot be read via JavaScript but are stored by browser. <a href="#" onclick="event.preventDefault(); alert(\'Open DevTools (F12) > Application > Cookies and select the domain to view all cookies including HttpOnly.\')" style="color:#cba6f7;">How to view?</a>';
+        cookieInfoHtml += ' &#x24d8; HttpOnly cookies (like .AspNet.ApplicationCookie) cannot be read via JavaScript but are stored by browser. <a href="#" id="httpOnlyHelpLink" style="color:#cba6f7;">How to view?</a>';
+        setTimeout(() => {
+          document.getElementById('httpOnlyHelpLink')?.addEventListener('click', e => { e.preventDefault(); alert('Open DevTools (F12) > Application > Cookies and select the domain to view all cookies including HttpOnly.'); });
+        }, 0);
       }
     }
 
@@ -435,7 +471,7 @@ sendBtn.addEventListener('click', async () => {
     statusDisplay.innerHTML = '<span class="status-badge" style="background:#f38ba8;color:#1e1e2e;">Error</span>';
     headersDisplay.textContent = '(no headers)';
     cookiesDisplay.innerHTML = renderCookieStore();
-    cookieInfo.innerHTML = 'Error: <span class="error-text">' + errMsg + '</span>';
+    cookieInfo.innerHTML = 'Error: <span class="error-text">' + escapeHtml(errMsg) + '</span>';
     updateCookiesEditor();
     bodyDisplay.textContent = 'Error: ' + errMsg;
     switchRespTab('status');
@@ -473,7 +509,7 @@ saveCookiesBtn.addEventListener('click', () => {
     delete cookieStore[domain];
     saveCookieStore();
     cookiesDisplay.innerHTML = renderCookieStore();
-    cookieInfo.innerHTML = 'Cookies cleared for <span>' + domain + '</span>';
+    cookieInfo.innerHTML = 'Cookies cleared for <span>' + escapeHtml(domain) + '</span>';
     return;
   }
 
@@ -490,7 +526,7 @@ saveCookiesBtn.addEventListener('click', () => {
   saveCookieStore();
 
   cookiesDisplay.innerHTML = renderCookieStore();
-  cookieInfo.innerHTML = 'Saved <span>' + Object.keys(newCookies).length + '</span> cookie(s) for <span>' + domain + '</span>';
+  cookieInfo.innerHTML = 'Saved <span>' + Object.keys(newCookies).length + '</span> cookie(s) for <span>' + escapeHtml(domain) + '</span>';
 });
 
 // Auto-save on form changes
