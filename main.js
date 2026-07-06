@@ -1,20 +1,29 @@
 (function () {
   const sendBtn = document.getElementById('sendBtn');
-  const loading = document.getElementById('loading');
+  const loadingSpinner = document.getElementById('loadingSpinner');
   const requestDisplay = document.getElementById('requestDisplay');
-  const statusDisplay = document.getElementById('statusDisplay');
+  const requestDetails = document.getElementById('requestDetails');
+  const statusBar = document.getElementById('statusBar');
+  const statusStrip = document.getElementById('statusStrip');
+  const statusBarBadge = document.getElementById('statusBarBadge');
+  const statusBarTime = document.getElementById('statusBarTime');
+  const statusBarSize = document.getElementById('statusBarSize');
   const headersDisplay = document.getElementById('headersDisplay');
   const cookiesDisplay = document.getElementById('cookiesDisplay');
   const cookieInfo = document.getElementById('cookieInfo');
   const bodyDisplay = document.getElementById('bodyDisplay');
   const urlInput = document.getElementById('url');
+  const urlError = document.getElementById('urlError');
   const methodSelect = document.getElementById('method');
   const credentialsSelect = document.getElementById('credentials');
   const bodyTextarea = document.getElementById('body');
   const headersList = document.getElementById('headersList');
   const cookiesEditor = document.getElementById('cookiesEditor');
   const saveCookiesBtn = document.getElementById('saveCookiesBtn');
+  const addHeaderBtn = document.getElementById('addHeaderBtn');
+  const respTabButtons = document.querySelectorAll('.resp-tab[role="tab"]');
 
+  // ---- HTML escaping ----
   function escapeHtml(str) {
     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     return String(str).replace(/[&<>"']/g, c => map[c]);
@@ -24,22 +33,26 @@
     return String(html || '').replace(/<[^>]*>/g, '').trim();
   }
 
+  // ---- State ----
   let saveTimer;
-  const respTabs = document.querySelectorAll('.resp-tab');
-  const respPanes = document.querySelectorAll('.resp-pane');
-
   let tabs = [];
   let currentTabId = null;
-
-  // ---- Cookie Store (manual reference, per-domain, persists in localStorage) ----
   let cookieStore = {};
+  let lastResponseMeta = null; // { status, statusText, duration, size, stripClass }
 
+  // ---- Cookie Store ----
   function loadCookieStore() {
     try { cookieStore = JSON.parse(localStorage.getItem('apiTester_cookies')) || {}; } catch (e) { cookieStore = {}; }
   }
 
   function saveCookieStore() {
-    localStorage.setItem('apiTester_cookies', JSON.stringify(cookieStore));
+    try {
+      localStorage.setItem('apiTester_cookies', JSON.stringify(cookieStore));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        console.warn('Cookie store: localStorage quota exceeded');
+      }
+    }
   }
 
   function addCookieToStore(domain, name, value, attrs) {
@@ -65,7 +78,7 @@
 
   function renderCookieStore() {
     const domains = Object.keys(cookieStore);
-    if (!domains.length) return '<span style="color:#6c7086;">(no cookies stored)</span>';
+    if (!domains.length) return '<span style="color:var(--text-subtle);">(no cookies stored)</span>';
     let html = '';
     domains.sort().forEach(d => {
       html += '<div class="cookie-domain">[' + escapeHtml(d) + ']</div>';
@@ -119,12 +132,33 @@
     return '';
   }
 
-  function renderStatusHtml(status, statusText) {
+  function getStripClass(status) {
+    if (status >= 200 && status < 300) return 'strip-2xx';
+    if (status >= 300 && status < 400) return 'strip-3xx';
+    if (status >= 400 && status < 500) return 'strip-4xx';
+    if (status >= 500) return 'strip-5xx';
+    return 'strip-err';
+  }
+
+  function renderStatusBadge(status, statusText) {
     return '<span class="status-badge ' + getStatusClass(status) + '">' + status + ' ' + escapeHtml(statusText || '') + '</span>';
   }
 
   function normalizeCredentials(value) {
     return ['same-origin', 'include', 'omit'].includes(value) ? value : 'same-origin';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes === null || bytes === undefined) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function formatDuration(ms) {
+    if (ms === null || ms === undefined) return '';
+    if (ms < 1000) return Math.round(ms) + ' ms';
+    return (ms / 1000).toFixed(2) + ' s';
   }
 
   // ---- Tab management ----
@@ -137,17 +171,22 @@
       url: '',
       method: 'GET',
       credentials: 'same-origin',
-      headers: [
-        { k: 'Accept', v: '*/*' }
-      ],
+      headers: [{ k: 'Accept', v: '*/*' }],
       body: '',
-      response: null
+      response: null,
+      responseMeta: null
     };
   }
 
   function saveToStorage() {
-    localStorage.setItem('apiTester_tabs', JSON.stringify(tabs));
-    localStorage.setItem('apiTester_activeTab', currentTabId);
+    try {
+      localStorage.setItem('apiTester_tabs', JSON.stringify(tabs));
+      localStorage.setItem('apiTester_activeTab', currentTabId);
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        console.warn('Tab storage: localStorage quota exceeded.');
+      }
+    }
   }
 
   function addHeader(key, val) {
@@ -169,6 +208,7 @@
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-btn';
     removeBtn.innerHTML = '&times;';
+    removeBtn.setAttribute('aria-label', 'Remove header');
     removeBtn.addEventListener('click', () => { div.remove(); autoSave(); });
 
     div.appendChild(keyInput);
@@ -211,6 +251,9 @@
     renderHeaders(data.headers);
     bodyTextarea.value = data.body || '';
     syncBodyState();
+    clearUrlError();
+    lastResponseMeta = data.responseMeta || null;
+    updateStatusBar();
   }
 
   function getCurrentTab() { return tabs.find(t => t.id === currentTabId); }
@@ -232,7 +275,7 @@
     currentTabId = id;
     applyFormData(tab);
     renderTabs();
-    showResponse(tab.response);
+    showResponse(tab.response, tab.responseMeta);
   }
 
   function switchTab(id) {
@@ -246,7 +289,8 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.value = tab.name;
-    input.style.cssText = 'background:#1e1e2e;border:1px solid #cba6f7;color:#cdd6f4;padding:2px 6px;border-radius:4px;font-size:13px;min-width:70px;max-width:180px;';
+    input.style.cssText = 'background:var(--bg-base);border:1px solid var(--accent);color:var(--text-primary);padding:2px 6px;border-radius:4px;font-size:13px;min-width:70px;max-width:180px;';
+
     element.replaceWith(input);
     input.focus();
     input.select();
@@ -271,6 +315,7 @@
       const el = document.createElement('div');
       el.className = 'tab-item' + (t.id === currentTabId ? ' active' : '');
       el.setAttribute('data-id', t.id);
+      el.setAttribute('tabindex', '0');
 
       const nameSpan = document.createElement('span');
       nameSpan.textContent = t.name;
@@ -285,9 +330,11 @@
       close.className = 'close-btn';
       close.textContent = '×';
       close.title = 'Delete tab';
+      close.setAttribute('aria-label', 'Delete tab');
       close.addEventListener('click', e => { e.stopPropagation(); deleteTab(t.id); });
       el.appendChild(close);
       el.addEventListener('click', () => switchTab(t.id));
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') switchTab(t.id); });
       bar.appendChild(el);
     });
 
@@ -295,6 +342,7 @@
     addBtn.className = 'add-btn';
     addBtn.textContent = '+';
     addBtn.title = 'Add new tab';
+    addBtn.setAttribute('aria-label', 'Add new tab');
     addBtn.addEventListener('click', addTab);
     bar.appendChild(addBtn);
   }
@@ -319,7 +367,7 @@
       const next = tabs[Math.min(idx, tabs.length - 1)];
       currentTabId = next.id;
       applyFormData(next);
-      showResponse(next.response);
+      showResponse(next.response, next.responseMeta);
     }
     renderTabs();
     saveToStorage();
@@ -331,7 +379,56 @@
     saveTimer = setTimeout(saveToStorage, 300);
   }
 
+  // ---- URL error ----
+  function showUrlError(msg) {
+    urlError.textContent = msg;
+    urlError.classList.add('active');
+  }
+
+  function clearUrlError() {
+    urlError.textContent = '';
+    urlError.classList.remove('active');
+  }
+
+  // ---- Status bar ----
+  function updateStatusBar() {
+    if (lastResponseMeta) {
+      const meta = lastResponseMeta;
+      statusBarBadge.innerHTML = renderStatusBadge(meta.status, meta.statusText || '');
+      statusBarTime.textContent = meta.duration !== null ? formatDuration(meta.duration) : '';
+      statusBarSize.textContent = meta.size !== null ? formatBytes(meta.size) : '';
+      statusBar.classList.add('active');
+      statusStrip.className = 'status-strip active ' + (meta.stripClass || '');
+    } else {
+      statusBar.classList.remove('active');
+      statusStrip.className = 'status-strip';
+    }
+  }
+
+  function setResponseMeta(status, statusText, duration, size) {
+    lastResponseMeta = {
+      status: status,
+      statusText: statusText || '',
+      duration: duration !== undefined ? duration : null,
+      size: size !== undefined ? size : null,
+      stripClass: getStripClass(status)
+    };
+    updateStatusBar();
+
+    const tab = getCurrentTab();
+    if (tab) {
+      tab.responseMeta = lastResponseMeta;
+      saveToStorage();
+    }
+  }
+
+  // ---- Cookies editor dirty flag ----
+  let cookiesEditorDirty = false;
+
+  cookiesEditor.addEventListener('input', () => { cookiesEditorDirty = true; });
+
   function updateCookiesEditor() {
+    if (cookiesEditorDirty) return;
     const domain = getUrlDomain(urlInput.value);
     if (!domain) { cookiesEditor.value = ''; return; }
     loadCookieStore();
@@ -344,38 +441,46 @@
       .join('; ');
   }
 
-  function showResponse(resp) {
+  function markCookiesEditorClean() {
+    cookiesEditorDirty = false;
+  }
+
+  // ---- Response display ----
+  function showResponse(resp, respMeta) {
+    markCookiesEditorClean();
     updateCookiesEditor();
+
+    if (respMeta) {
+      lastResponseMeta = respMeta;
+      updateStatusBar();
+    } else if (!resp) {
+      lastResponseMeta = null;
+      updateStatusBar();
+    }
+
     if (!resp) {
-      requestDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
-      statusDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
-      headersDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
-      cookiesDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
-      cookieInfo.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
-      bodyDisplay.innerHTML = '<span style="color:#6c7086;">No request sent yet.</span>';
+      requestDisplay.innerHTML = '<span class="empty-state">No request sent yet.</span>';
+      headersDisplay.innerHTML = '<span class="empty-state">No request sent yet.</span>';
+      cookiesDisplay.innerHTML = '<span class="empty-state">No request sent yet.</span>';
+      cookieInfo.innerHTML = '<span class="empty-state">No request sent yet.</span>';
+      bodyDisplay.innerHTML = '<span class="empty-state">Enter a URL above and click Send to see the response here.</span>';
+      if (requestDetails) requestDetails.open = false;
       return;
     }
 
     if (resp.error) {
-      statusDisplay.innerHTML = '<span class="status-badge" style="background:#f38ba8;color:#1e1e2e;">Error</span>';
+      requestDisplay.textContent = resp.requestLog || '(no request)';
       headersDisplay.textContent = '(no headers)';
       cookiesDisplay.innerHTML = renderCookieStore();
       cookieInfo.innerHTML = 'Error: <span class="error-text">' + escapeHtml(resp.error) + '</span>';
       bodyDisplay.textContent = 'Error: ' + resp.error;
-      requestDisplay.textContent = resp.requestLog || '';
+      if (requestDetails) requestDetails.open = true;
       return;
     }
 
-    if (typeof resp.statusCode === 'number') {
-      statusDisplay.innerHTML = renderStatusHtml(resp.statusCode, resp.statusText || '');
-    } else if (resp.statusHtml) {
-      statusDisplay.textContent = stripHtml(resp.statusHtml) || 'Status available';
-    } else {
-      statusDisplay.innerHTML = '<span style="color:#6c7086;">No status</span>';
-    }
-
+    requestDisplay.textContent = resp.requestLog || '';
     headersDisplay.textContent = resp.headersText || '(no headers)';
-    cookiesDisplay.innerHTML = resp.cookiesHtml || '<span style="color:#6c7086;">(no cookies stored)</span>';
+    cookiesDisplay.innerHTML = resp.cookiesHtml || '<span style="color:var(--text-subtle);">(no cookies stored)</span>';
 
     if (resp.cookieInfoHtml) {
       cookieInfo.innerHTML = resp.cookieInfoHtml;
@@ -384,19 +489,33 @@
     }
 
     bodyDisplay.textContent = resp.bodyText || '';
-    requestDisplay.textContent = resp.requestLog || '';
+    if (requestDetails) requestDetails.open = false;
   }
 
+  // ---- Response tab switching ----
   function switchRespTab(name) {
-    const allowed = new Set(['request', 'status', 'headers', 'cookies', 'body']);
+    const allowed = new Set(['body', 'headers', 'cookies']);
     if (!allowed.has(name)) return;
 
-    respTabs.forEach(t => t.classList.remove('active'));
-    respPanes.forEach(p => p.classList.remove('active'));
+    const tabs = document.querySelectorAll('.resp-tab[role="tab"]');
+    const panes = document.querySelectorAll('.resp-pane[role="tabpanel"]');
 
-    const tab = document.querySelector('.resp-tab[data-tab="' + name + '"]');
-    const pane = document.getElementById('tab-' + name);
-    if (tab) tab.classList.add('active');
+    tabs.forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+      t.setAttribute('tabindex', '-1');
+    });
+    panes.forEach(p => p.classList.remove('active'));
+
+    const tabBtn = document.getElementById('tab-btn-' + name);
+    const pane = document.getElementById('tab-pane-' + name);
+
+    if (tabBtn) {
+      tabBtn.classList.add('active');
+      tabBtn.setAttribute('aria-selected', 'true');
+      tabBtn.setAttribute('tabindex', '0');
+      tabBtn.focus();
+    }
     if (pane) pane.classList.add('active');
   }
 
@@ -418,9 +537,24 @@
   }
 
   // ---- Send handler ----
-  sendBtn.addEventListener('click', async () => {
+  async function doSend() {
     const url = urlInput.value.trim();
-    if (!url) { alert('Please enter a URL'); return; }
+    clearUrlError();
+
+    if (!url) {
+      showUrlError('Enter a URL');
+      urlInput.focus();
+      return;
+    }
+
+    let validUrl;
+    try {
+      validUrl = new URL(url);
+    } catch {
+      showUrlError('Invalid URL format');
+      urlInput.focus();
+      return;
+    }
 
     saveCurrentTab();
 
@@ -447,10 +581,11 @@
     });
 
     sendBtn.disabled = true;
-    loading.classList.add('active');
+    loadingSpinner.classList.add('active');
+    clearUrlError();
 
     const credentials = normalizeCredentials(credentialsSelect?.value || 'same-origin');
-    const crossOrigin = (() => { try { return new URL(url).origin !== location.origin; } catch { return false; } })();
+    const crossOrigin = validUrl.origin !== location.origin;
 
     const contentType = String(getHeaderIgnoreCase(effectiveHeaders, 'Content-Type') || '').toLowerCase();
     const isNonSimpleContentType = !!contentType && !['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data'].includes(contentType);
@@ -461,7 +596,7 @@
     Object.entries(headers).forEach(([k, v]) => { requestLog += k + ': ' + v + '\n'; });
 
     if (forbiddenHeaders.length > 0) {
-      requestLog += '\n--- ⚠ Fetch restriction ---\n';
+      requestLog += '\n--- Fetch restriction ---\n';
       requestLog += 'These headers are forbidden and will be stripped by browser fetch: ' + forbiddenHeaders.join(', ') + '\n';
     }
 
@@ -472,7 +607,7 @@
     }
 
     if (url.toLowerCase().startsWith('http://')) {
-      requestLog += '\n--- ⚠ Security Warning ---\nRequest uses plain HTTP. Headers/body/tokens can be intercepted on the network.\n';
+      requestLog += '\n--- Security Warning ---\nRequest uses plain HTTP. Headers/body/tokens can be intercepted on the network.\n';
     }
 
     if (crossOrigin && mayPreflight) {
@@ -480,7 +615,7 @@
     }
 
     requestDisplay.textContent = requestLog;
-    switchRespTab('request');
+    if (requestDetails) requestDetails.open = true;
 
     let respData = { requestLog };
 
@@ -491,7 +626,10 @@
     if (!['GET', 'HEAD'].includes(method) && body) fetchOptions.body = body;
 
     try {
+      const startTime = performance.now();
       const response = await fetch(url, fetchOptions);
+      const duration = performance.now() - startTime;
+
       const responseStatus = response.status;
       const responseStatusText = response.statusText;
 
@@ -504,9 +642,10 @@
         responseBodyText = '[Binary data: ' + (blob.type || 'unknown type') + ', ' + blob.size + ' bytes]';
       }
 
-      // Set-Cookie is a forbidden response-header name for fetch.
-      // Browser JS cannot read it directly. We use document.cookie diff,
-      // which only reflects same-origin, non-HttpOnly cookies.
+      const bodySizeBytes = (typeof responseBodyText === 'string')
+        ? new Blob([responseBodyText]).size
+        : null;
+
       let cookieResults = [];
       if (!crossOrigin && domain) {
         const cookiesAfter = document.cookie;
@@ -531,7 +670,6 @@
       }
 
       const formattedBody = tryFormatJson(responseBodyText);
-      const statusHtml = renderStatusHtml(responseStatus, responseStatusText);
       const headersText = formatResponseHeaders(response) || '(no headers)';
       const cookiesHtml = renderCookieStore();
 
@@ -547,42 +685,114 @@
           : 'No readable new cookies detected. HttpOnly cookies are not readable via JavaScript.';
       }
 
-      statusDisplay.innerHTML = statusHtml;
       headersDisplay.textContent = headersText;
       cookiesDisplay.innerHTML = cookiesHtml;
       cookieInfo.innerHTML = cookieInfoHtml;
       bodyDisplay.textContent = formattedBody;
-      switchRespTab('status');
+      switchRespTab('body');
 
       respData.statusCode = responseStatus;
-      respData.statusText = responseStatusText;
-      respData.statusHtml = statusHtml;
       respData.headersText = headersText;
       respData.cookiesHtml = cookiesHtml;
       respData.cookieInfoHtml = cookieInfoHtml;
       respData.bodyText = formattedBody;
       respData.error = null;
 
+      setResponseMeta(responseStatus, responseStatusText, duration, bodySizeBytes);
+
+      markCookiesEditorClean();
       updateCookiesEditor();
     } catch (err) {
       const errMsg = err?.message || String(err);
-      statusDisplay.innerHTML = '<span class="status-badge" style="background:#f38ba8;color:#1e1e2e;">Error</span>';
-      headersDisplay.textContent = '(no headers)';
-      cookiesDisplay.innerHTML = renderCookieStore();
-      cookieInfo.innerHTML = 'Error: <span class="error-text">' + escapeHtml(errMsg) + '</span>';
+      const isCorsError = errMsg.toLowerCase().includes('failed to fetch') && crossOrigin;
+
+      if (isCorsError) {
+        const targetOrigin = (() => { try { return new URL(url).origin; } catch { return url; } })();
+        const corsHelp = [
+          'CORS Error: The server did not allow this cross-origin request.',
+          '',
+          'The server at ' + targetOrigin + ' must respond with:',
+          '  Access-Control-Allow-Origin: ' + location.origin,
+          '',
+          'Options to work around this:',
+          '• Use a CORS proxy: https://corsproxy.io/?' + encodeURIComponent(url),
+          '• Install a browser extension that disables CORS (for dev only)',
+          '• Run the server with CORS headers enabled'
+        ].join('\n');
+
+        bodyDisplay.textContent = corsHelp;
+        headersDisplay.textContent = '(blocked by CORS policy)';
+        cookiesDisplay.innerHTML = renderCookieStore();
+        cookieInfo.innerHTML = 'Request blocked by CORS policy. See Response Body for details.';
+      } else {
+        headersDisplay.textContent = '(no headers)';
+        cookiesDisplay.innerHTML = renderCookieStore();
+        cookieInfo.innerHTML = 'Error: <span class="error-text">' + escapeHtml(errMsg) + '</span>';
+        bodyDisplay.textContent = 'Error: ' + errMsg;
+      }
+
+      markCookiesEditorClean();
       updateCookiesEditor();
-      bodyDisplay.textContent = 'Error: ' + errMsg;
-      switchRespTab('status');
+
+      setResponseMeta(isCorsError ? 0 : 0, isCorsError ? 'CORS blocked' : 'Error', null, null);
 
       respData.error = errMsg;
     } finally {
       const tab = getCurrentTab();
-      if (tab) { tab.response = respData; saveToStorage(); }
+      if (tab) {
+        tab.response = respData;
+        tab.responseMeta = lastResponseMeta;
+        saveToStorage();
+      }
       sendBtn.disabled = false;
-      loading.classList.remove('active');
+      loadingSpinner.classList.remove('active');
+    }
+  }
+
+  sendBtn.addEventListener('click', doSend);
+
+  // ---- Keyboard shortcuts ----
+  urlInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      doSend();
     }
   });
 
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      doSend();
+    }
+  });
+
+  // Response tab keyboard navigation (ArrowLeft / ArrowRight)
+  document.querySelector('.resp-tabs')?.addEventListener('keydown', e => {
+    const tabs = Array.from(document.querySelectorAll('.resp-tab[role="tab"]'));
+    const currentIdx = tabs.findIndex(t => t.classList.contains('active'));
+    if (currentIdx === -1) return;
+
+    let newIdx = currentIdx;
+    if (e.key === 'ArrowRight') newIdx = (currentIdx + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') newIdx = (currentIdx - 1 + tabs.length) % tabs.length;
+    else return;
+
+    e.preventDefault();
+    switchRespTab(tabs[newIdx].getAttribute('data-tab'));
+  });
+
+  // Response tab click/keydown
+  document.querySelectorAll('.resp-tab[role="tab"]').forEach(tab => {
+    tab.addEventListener('click', () => switchRespTab(tab.getAttribute('data-tab')));
+    tab.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        switchRespTab(tab.getAttribute('data-tab'));
+      }
+    });
+  });
+
+  // ---- Save Cookies ----
   saveCookiesBtn.addEventListener('click', () => {
     const raw = cookiesEditor.value.trim();
     const domain = getUrlDomain(urlInput.value);
@@ -594,6 +804,7 @@
       saveCookieStore();
       cookiesDisplay.innerHTML = renderCookieStore();
       cookieInfo.innerHTML = 'Local cookie reference cleared for <span>' + escapeHtml(domain) + '</span>';
+      markCookiesEditorClean();
       return;
     }
 
@@ -611,9 +822,13 @@
 
     cookiesDisplay.innerHTML = renderCookieStore();
     cookieInfo.innerHTML = 'Saved <span>' + Object.keys(newCookies).length + '</span> local cookie reference value(s) for <span>' + escapeHtml(domain) + '</span>';
+    markCookiesEditorClean();
   });
 
-  // Auto-save on form changes
+  // ---- Add Header btn ----
+  addHeaderBtn.addEventListener('click', () => addHeader());
+
+  // ---- Auto-save on form changes ----
   [urlInput, methodSelect, credentialsSelect, bodyTextarea].filter(Boolean).forEach(el => {
     el.addEventListener('input', autoSave);
     el.addEventListener('change', autoSave);
@@ -622,14 +837,7 @@
 
   methodSelect.addEventListener('change', syncBodyState);
 
-  // Stable delegated help handler
-  document.addEventListener('click', e => {
-    const target = e.target;
-    if (target && target.classList && target.classList.contains('http-only-help')) {
-      e.preventDefault();
-      alert('Open DevTools (F12) > Application > Cookies and select the domain to view all cookies including HttpOnly.');
-    }
-  });
+  urlInput.addEventListener('input', clearUrlError);
 
   // ---- Init ----
   document.addEventListener('DOMContentLoaded', () => {
@@ -641,6 +849,7 @@
         currentTabId = localStorage.getItem('apiTester_activeTab');
         if (!tabs.find(t => t.id === currentTabId)) currentTabId = tabs[0]?.id;
       } catch {
+        console.warn('Could not restore previous session — starting fresh.');
         tabs = [];
       }
     }
@@ -651,7 +860,7 @@
     }
     renderTabs();
     const tab = getCurrentTab();
-    if (tab) { applyFormData(tab); showResponse(tab.response); }
+    if (tab) { applyFormData(tab); showResponse(tab.response, tab.responseMeta); }
 
     syncBodyState();
   });
@@ -662,7 +871,7 @@
     saveToStorage();
   });
 
-  // Expose handlers used by inline HTML attributes
+  // Legacy exports for external access
   window.addHeader = addHeader;
   window.switchRespTab = switchRespTab;
 })();

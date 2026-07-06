@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,8 +10,8 @@
 
 <div class="container">
 <header>
-<h1>&#x2699; API Tester</h1>
-<span>Postman-like tool in browser</span>
+<h1><span aria-hidden="true">&#x2699;</span> API Tester</h1>
+<span>HTTP client for REST API testing</span>
 </header>
 
 <div class="tab-bar" id="tabBar"></div>
@@ -19,8 +19,9 @@
 <div class="request-panel">
 <div class="row">
 <label for="url">URL</label>
-<input type="text" id="url" class="url-input" placeholder="https://api.example.com/endpoint">
-<select id="method" class="method-select">
+<input type="text" id="url" class="url-input" placeholder="https://api.example.com/endpoint" aria-label="Request URL">
+<span id="urlError" class="url-error"></span>
+<select id="method" class="method-select" aria-label="HTTP method">
 <option value="GET">GET</option>
 <option value="POST">POST</option>
 <option value="PUT">PUT</option>
@@ -29,65 +30,73 @@
 <option value="HEAD">HEAD</option>
 <option value="OPTIONS">OPTIONS</option>
 </select>
-<select id="credentials" class="method-select" style="width:auto; min-width: 132px;">
+<select id="credentials" class="credentials-select" aria-label="Fetch credentials mode">
 <option value="same-origin">same-origin</option>
 <option value="include">include</option>
 <option value="omit">omit</option>
 </select>
-<button id="sendBtn" class="send-btn">Send</button>
-<span id="loading" class="loading">Sending...</span>
+<button id="sendBtn" class="send-btn" aria-label="Send request (Ctrl+Enter)">Send</button>
+<div class="loading-spinner" id="loadingSpinner" role="status" aria-label="Sending request"></div>
 </div>
 
-<div class="row" style="align-items: flex-start;">
-<label>Headers</label>
+<div class="row row-top">
+<span class="row-label">Headers</span>
 <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
 <div id="headersList" class="headers-grid"></div>
-<button class="add-header-btn" onclick="addHeader()">+ Add header</button>
-    <div class="hint">&#x24d8; Для методов с body (POST/PUT/PATCH/DELETE/OPTIONS) Content-Type: application/json добавляется автоматически, если вы не задали его явно. Для cross-origin запросов используйте credentials=include, если сервер поддерживает Access-Control-Allow-Credentials.</div>
+<button id="addHeaderBtn" class="add-header-btn">+ Add header</button>
+<div class="hint">&#x24d8; For methods with a body, Content-Type: application/json is added automatically unless you specify one. For cross-origin requests, set credentials to include if the server supports Access-Control-Allow-Credentials.</div>
 </div>
 </div>
 
-<div class="row" style="align-items: flex-start;">
-<label>Body</label>
-<textarea id="body" rows="4" placeholder='{"key": "value"}'></textarea>
+<div class="row row-top">
+<label for="body">Body</label>
+<textarea id="body" rows="4" placeholder='{"key": "value"}' aria-label="Request body (ignored for GET/HEAD)"></textarea>
 </div>
 </div>
 
 <div class="response-panel">
-<div class="resp-tabs">
-<div class="resp-tab active" data-tab="request" onclick="switchRespTab('request')">Request</div>
-<div class="resp-tab" data-tab="status" onclick="switchRespTab('status')">Status</div>
-<div class="resp-tab" data-tab="headers" onclick="switchRespTab('headers')">Response Headers</div>
-<div class="resp-tab" data-tab="cookies" onclick="switchRespTab('cookies')">Cookies</div>
-<div class="resp-tab" data-tab="body" onclick="switchRespTab('body')">Response Body</div>
+<div class="request-details">
+<details id="requestDetails">
+<summary>Sent Request</summary>
+<pre id="requestDisplay"><span class="empty-state">No request sent yet.</span></pre>
+</details>
+</div>
+
+<div id="statusBar" class="status-bar" role="status" aria-live="polite">
+<div class="status-bar-left">
+<div id="statusBarBadge"></div>
+</div>
+<div class="status-bar-meta">
+<span id="statusBarTime"></span>
+<span id="statusBarSize"></span>
+</div>
+</div>
+<div id="statusStrip" class="status-strip"></div>
+
+<div class="resp-tabs" role="tablist" aria-label="Response panels">
+<div class="resp-tab active" role="tab" id="tab-btn-body" tabindex="0" aria-selected="true" aria-controls="tab-pane-body" data-tab="body">Body</div>
+<div class="resp-tab" role="tab" id="tab-btn-headers" tabindex="-1" aria-selected="false" aria-controls="tab-pane-headers" data-tab="headers">Headers</div>
+<div class="resp-tab" role="tab" id="tab-btn-cookies" tabindex="-1" aria-selected="false" aria-controls="tab-pane-cookies" data-tab="cookies">Cookies</div>
 </div>
 
 <div class="resp-content">
-<div id="tab-request" class="resp-pane active">
-<h3>Sent Request</h3>
-<pre id="requestDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
-</div>
-<div id="tab-status" class="resp-pane">
-<h3>Status</h3>
-<div id="statusDisplay"><span style="color:#6c7086;">No request sent yet.</span></div>
-</div>
-<div id="tab-headers" class="resp-pane">
-<h3>Response Headers</h3>
-<pre id="headersDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
-</div>
-<div id="tab-cookies" class="resp-pane">
-<h3>Cookies</h3>
-<div id="cookieInfo" class="cookie-info"><span style="color:#6c7086;">No request sent yet.</span></div>
-<div style="margin-bottom:8px;display:flex;gap:6px;align-items:center;">
-<textarea id="cookiesEditor" rows="4" style="flex:1;background:#313244;border:1px solid #45475a;color:#cdd6f4;padding:8px 10px;border-radius:6px;font-size:13px;font-family:'JetBrains Mono','Cascadia Code','Fira Code',monospace;resize:vertical;" placeholder="name1=value1; name2=value2"></textarea>
-<button id="saveCookiesBtn" style="background:#a6e3a1;color:#1e1e2e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;">Save Cookies</button>
-</div>
-<div style="font-size:12px;color:#a6adc8;margin-bottom:6px;">Cookies stored by domain:</div>
-<div id="cookiesDisplay"></div>
-</div>
-<div id="tab-body" class="resp-pane">
+<div id="tab-pane-body" class="resp-pane active" role="tabpanel" aria-labelledby="tab-btn-body">
 <h3>Response Body</h3>
-<pre id="bodyDisplay"><span style="color:#6c7086;">No request sent yet.</span></pre>
+<pre id="bodyDisplay"><span class="empty-state">Enter a URL above and click Send to see the response here.</span></pre>
+</div>
+<div id="tab-pane-headers" class="resp-pane" role="tabpanel" aria-labelledby="tab-btn-headers">
+<h3>Response Headers</h3>
+<pre id="headersDisplay"><span class="empty-state">No request sent yet.</span></pre>
+</div>
+<div id="tab-pane-cookies" class="resp-pane" role="tabpanel" aria-labelledby="tab-btn-cookies">
+<h3>Cookies</h3>
+<div id="cookieInfo" class="cookie-info"><span class="empty-state">No request sent yet.</span></div>
+<div style="margin-bottom:8px;display:flex;gap:6px;align-items:center;">
+<textarea id="cookiesEditor" class="cookies-editor" rows="4" placeholder="name1=value1; name2=value2" aria-label="Cookie editor"></textarea>
+<button id="saveCookiesBtn" class="save-cookies-btn">Save Locally</button>
+</div>
+<div style="font-size:12px;color:var(--text-subtle);margin-bottom:6px;">Local cookie reference (per domain) — stored for reference only, not sent with requests.</div>
+<div id="cookiesDisplay"></div>
 </div>
 </div>
 </div>
