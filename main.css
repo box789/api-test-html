@@ -43,7 +43,7 @@ textarea:focus { outline: none; border-color: #cba6f7; }
 .resp-content { flex: 1; overflow: auto; padding: 0; }
 .resp-pane { display: none; padding: 16px 24px; height: 100%; }
 .resp-pane.active { display: block; }
-.resp-pane pre { background: #11111b; padding: 12px 16px; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; overflow: auto; white-space: pre-wrap; word-break: break-all; max-height: calc(100vh - 460px); }
+.resp-pane pre { background: #11111b; padding: 12px 16px; border-radius: 6px; font-size: 13px; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; overflow: auto; white-space: pre-wrap; word-break: break-all; max-height: none; }
 .resp-pane h3 { font-size: 13px; font-weight: 500; color: #a6adc8; margin-bottom: 8px; }
 .status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 600; }
 .status-2xx { background: #a6e3a1; color: #1e1e2e; }
